@@ -208,7 +208,7 @@ pybind11==2.13.6
 pycosat==0.6.6
 pycountry==24.6.1
 pycparser==2.22
-pydantic==2.11.4
+pydantic==2.11.5
 pydantic_core==2.33.2
 pydeck==0.9.1
 pyfg==0.3.4
