@@ -181,7 +181,7 @@ pandas==2.2.3
 parameterized==0.9.0
 parso==0.8.4
 partial-json-parser==0.2.1.1.post4
-peft==0.14.0
+peft==0.15.2
 pexpect==4.9.0
 pillow==10.4.0
 pip==24.2
