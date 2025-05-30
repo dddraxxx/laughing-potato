@@ -3,17 +3,19 @@ set -x
 PROJECT_NAME="agent_vlagent"
 EXPERIMENT_NAME="debug_for_single_node"
 
-export SAVE_CHECKPOINT_DIR=/diancpfs/user/fengyuan/verl_checkpoints
+homedir=$HOME
+export SAVE_CHECKPOINT_DIR="${homedir}/work/verl_checkpoints"
 # export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues
+export REF_MODEL_PATH="${homedir}/work/backbone/qwen25/Qwen2.5-VL-7B-Instruct"
+export WORLD_SIZE=1
 
-BASEDIR=/path/to/your/data
+BASEDIR="${homedir}/work/data"
 VISUAL_DATASET_TRAIN_0_6_2=${BASEDIR}/data_v0.6.2_reason.parquet
 VISUAL_DATASET_TRAIN_0_1_2=${BASEDIR}/data_0.1.2_visual_toolbox_v2.parquet
-VISUAL_DATASET_TRAIN_0_8=${BASEDIR}/minghao_data_vnew/data_v0.8_visual_toolbox_v2.parquet
+VISUAL_DATASET_TRAIN_0_8=${BASEDIR}/data_v0.8_visual_toolbox_v2.parquet
 VISUAL_DATASET_TEST=${BASEDIR}/seekworld_test.parquet
 EUREKA_DATASET_TRAIN=${BASEDIR}/data_thinklite_reasoning_acc.parquet
 
-REF_MODEL_PATH=/cpfs/user/fengyuan/backbone/qwen25/Qwen2.5-VL-7B-Instruct
 PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     +debug=False \
     +vs_debug=False \
@@ -57,7 +59,7 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.agent.concurrent_workers=1 \
     actor_rollout_ref.rollout.agent.show_tqdm=True \
     trainer.critic_warmup=0 \
-    trainer.logger=['console','wandb','rl_logging_board'] \
+    trainer.logger=['console','rl_logging_board','tensorboard'] \
     trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=${WORLD_SIZE} \
