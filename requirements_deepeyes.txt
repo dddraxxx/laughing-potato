@@ -175,7 +175,7 @@ openrlhf==0.5.5.post2
 optimum==1.23.3
 orjson==3.10.15
 outlines==0.1.11
-outlines_core==0.1.26
+outlines_core==0.2.11
 packaging==24.1
 pandas==2.2.3
 parameterized==0.9.0
