@@ -10,7 +10,7 @@ openai_api_key = "EMPTY"
 openai_api_base_list = [
     # "http://172.30.52.123:8000/v1",
     # "http://10.39.3.123:18901/v1",
-    os.environ.get("LLM_AS_A_JUDGE_BASE", "http://10.39.3.123:18901/v1"),
+    os.environ.get("LLM_AS_A_JUDGE_BASE", "http://ec2-34-227-102-124.compute-1.amazonaws.com:18901/v1"),
 ]
 
 client_list = []
@@ -89,7 +89,7 @@ Judgement: 0
     return [example_1, example_2, example_3, example_4, example_5, example_6, example_7]
 
 COMMON_VERIFY_PROMPT = """# CONTEXT #
-I am a teacher, and I have some high-level reasoning problems. I am tasked with evaluating the correctness of a student's answer. 
+I am a teacher, and I have some high-level reasoning problems. I am tasked with evaluating the correctness of a student's answer.
 Below, I am provided with a problem and a reference answer. Additionally, a student's answer is provided. My job is to assess whether the student's answer captures the same meaning as the reference answer, even when expressed with different wording or format.
 
 # OBJECTIVE #
@@ -121,7 +121,7 @@ Professional, scientific.
 
 
 MATH_VERIFY_PROMPT = """# CONTEXT #
-I am a teacher, and I have some high-level math problems. I am tasked with evaluating the correctness of a student's answer. 
+I am a teacher, and I have some high-level math problems. I am tasked with evaluating the correctness of a student's answer.
 Below, I am provided with a problem and a reference answer. Additionally, a student's answer is provided. My job is to assess whether the student's answer captures the same meaning as the reference answer, even when expressed with different wording or format.
 
 # OBJECTIVE #
@@ -172,10 +172,10 @@ Judgement:"""
 def extract_answer(text):
     """
     从给定的文本中提取<answer></answer>标签内部的内容。
-    
+
     参数:
         text (str): 包含<answer>标签的文本
-        
+
     返回:
         str or None: 标签内部的内容，如果未找到则返回None。
     """
@@ -265,7 +265,7 @@ def compute_score(predict_str: str, ground_truth: str, extra_info=None) -> float
     # reward 2
     return 0.8 * acc_reward + 0.2 * format_reward + 1.2 * tool_reward
 
-    # reward 2 
+    # reward 2
     # return 1.0 * acc_reward + 0.2 * format_reward + 1.0 * tool_reward + 0.2 * tool_reward_base
     # reward 3
     # tool_reward_alpha = 1.2 if count_vision_1 > 0 else 0.0
@@ -375,7 +375,7 @@ def generative_verify(query, ground_truth, model_answer):
         except Exception as e:
             print(f' [ERROR math] generative_verify error: {e}')
             continue
-    
+
     judgement = response.split('## Equivalence Judgement')[-1].lower()
     if 'true' in judgement and 'false' not in judgement:
         return True
@@ -409,7 +409,7 @@ def compute_score_math(predict_str: str, ground_truth: str, extra_info=None) -> 
             acc_reward = 1.0
         else:
             acc_reward = 1.0 if generative_verify(extra_info['question'], ground_truth, model_answer) else 0.0
-    
+
     format_reward = -1.0 if is_format_error else 0.0
     print(f' [DEBUG] query={extra_info["question"]}, {ground_truth=}, {model_answer=}, {acc_reward=}, {format_reward=}')
     return 1.2 * acc_reward + 0.4 * format_reward
