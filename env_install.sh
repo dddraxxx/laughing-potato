@@ -13,3 +13,4 @@ uv pip install flash-attn --no-build-isolation
 uv pip install -e .[gpu]
 uv pip install pip
 bash scripts/uvinstall_deepeyes.sh
+uv pip install tensorboard
