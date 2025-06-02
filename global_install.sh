@@ -26,3 +26,5 @@ uvp tensordict==0.6.2
 uvp triton==3.2.0
 uvp qwen_vl_utils
 uvp math_verify
+
+uvp ipykernel jupyterlab
