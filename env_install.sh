@@ -3,7 +3,7 @@ set -e
 # if no uv, install it
 if ! command -v uv &> /dev/null; then
     curl -LsSf https://astral.sh/uv/install.sh | sh
-    source ~/.bashrc
+    source $HOME/.local/bin/env 
 fi
 
 uv venv --python 3.11
