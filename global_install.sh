@@ -1,8 +1,9 @@
+set -e
+
 uv pip install -e .[math,geo,vllm] --system
 uv pip install flash-attn --no-build-isolation --system
 uv pip install -e .[gpu] --system
 uv pip install pip --system
-bash scripts/uvinstall_deepeyes.sh --system
 uv pip install tensorboard --system
 
 uv pip install evaluate --system
