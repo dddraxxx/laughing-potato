@@ -18,9 +18,9 @@ import requests
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_name', type=str, default='qwen', help='Model name for result save')
 parser.add_argument('--api_key', type=str, default='EMPTY', help='API key')
-parser.add_argument('--api_url', type=str, default='http://10.39.19.140:8000/v1', help='API URL')
-parser.add_argument('--vstar_bench_path', type=str, default=None, help='Path to the V* benchmark')
-parser.add_argument('--save_path', type=str, default=None, help='Path to save the results')
+parser.add_argument('--api_url', type=str, default='http://localhost:18900/v1', help='API URL')
+parser.add_argument('--vstar_bench_path', type=str, default='/home/ubuntu/work/eval_data/vstar_bench/', help='Path to the V* benchmark')
+parser.add_argument('--save_path', type=str, default='./eval_results', help='Path to save the results')
 parser.add_argument('--eval_model_name', type=str, default=None, help='Model name for evaluation')
 parser.add_argument('--num_workers', type=int, default=8)
 args = parser.parse_args()
@@ -65,9 +65,9 @@ Return a json object with function name and arguments within <tool_call></tool_c
 {"name": <function-name>, "arguments": <args-json-object>}
 </tool_call>
 
-**Example**:  
-<tool_call>  
-{"name": "image_zoom_in_tool", "arguments": {"bbox_2d": [10, 20, 100, 200], "label": "the apple on the desk"}}  
+**Example**:
+<tool_call>
+{"name": "image_zoom_in_tool", "arguments": {"bbox_2d": [10, 20, 100, 200], "label": "the apple on the desk"}}
 </tool_call>"""
 USER_PROMPT_V2 = "\nThink first, call **image_zoom_in_tool** if needed, then answer. Format strictly as:  <think>...</think>  <tool_call>...</tool_call> (if tools needed)  <answer>...</answer> "
 
@@ -131,7 +131,7 @@ def process(img_arg):
     option_str = "\n"
     for i in range(len(options)):
         option_str += abc_map[i + 1] + '. ' + options[i] + '\n'
-    
+
     prompt = instruction_prompt_before.format(question=question, options=option_str)
     pil_img = Image.open(img_path)
 
@@ -188,7 +188,7 @@ def process(img_arg):
             }
             response = client.chat.completions.create(**params)
             response_message = response.choices[0].message.content
-            
+
             if start_token in response_message:
                 action_list = response_message.split(start_token)[1].split(end_token)[0].strip()
                 action_list = eval(action_list)
@@ -230,7 +230,7 @@ def process(img_arg):
                 ]
 
                 chat_message.extend(_message)
-            
+
                 p_message =[
                     {
                         "role": "assistant",
@@ -260,7 +260,7 @@ def process(img_arg):
     except Exception as e:
         print(f"Error!!!!", e)
         status = 'error'
-                
+
 
     if '</answer>' in response_message and '<answer>' in response_message:
         output_text = response_message.split('<answer>')[1].split('</answer>')[0].strip()
@@ -296,7 +296,7 @@ if __name__ == "__main__":
 
         pool.close()
         pool.join()
-    
+
         with open(os.path.join(save_path, save_name), 'w') as f:
             for item in save_json:
                 f.write(json.dumps(item) + '\n')

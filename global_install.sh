@@ -27,4 +27,4 @@ uvp triton==3.2.0
 uvp qwen_vl_utils
 uvp math_verify
 
-uvp ipykernel jupyterlab
+uvp ipykernel jupyterlab matplotlib

@@ -10,7 +10,8 @@ vllm serve $trained_weights \
     --port 18900 \
     --gpu-memory-utilization 0.8 \
     --max-model-len 32768 \
-    --tensor-parallel-size 1 \
+    --tensor-parallel-size 2 \
     --served-model-name "de7b" \
     --trust-remote-code \
-    --disable-log-requests
+    --disable-log-requests \
+    --limit_mm_per_prompt "image=10"
