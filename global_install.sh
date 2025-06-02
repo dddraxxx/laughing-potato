@@ -1,4 +1,9 @@
 set -e
+# if no uv, install it
+if ! command -v uv &> /dev/null; then
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    source $HOME/.local/bin/env
+fi
 
 uv pip install -e .[math,geo,vllm] --system
 uv pip install flash-attn --no-build-isolation --system
