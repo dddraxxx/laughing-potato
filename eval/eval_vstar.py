@@ -22,7 +22,7 @@ parser.add_argument('--api_url', type=str, default='http://localhost:18900/v1', 
 parser.add_argument('--vstar_bench_path', type=str, default='/home/ubuntu/work/eval_data/vstar_bench/', help='Path to the V* benchmark')
 parser.add_argument('--save_path', type=str, default='./eval_results', help='Path to save the results')
 parser.add_argument('--eval_model_name', type=str, default=None, help='Model name for evaluation')
-parser.add_argument('--num_workers', type=int, default=8)
+parser.add_argument('--num_workers', type=int, default=1)
 args = parser.parse_args()
 
 
@@ -184,7 +184,7 @@ def process(img_arg):
                 "messages": chat_message,
                 "temperature": 0.0,
                 "max_tokens": 10240,
-                "stop": ["<|im_end|>\n".strip()],
+                "stop": ["<|im_end|>\n".strip(), "</tool_call>"],
             }
             response = client.chat.completions.create(**params)
             response_message = response.choices[0].message.content
@@ -246,6 +246,8 @@ def process(img_arg):
                 ]
                 print_messages.extend(p_message)
                 turn_idx += 1
+                print(f"Turn idx: {turn_idx}")
+                print(f"Turn ctx: {response_message}")
             else:
                 p_message =[
                     {
@@ -286,7 +288,7 @@ if __name__ == "__main__":
         test_path = os.path.join(vstar_bench_path, test_type)
         pool = multiprocessing.Pool(processes=args.num_workers)
         image_files = list(filter(lambda file: '.json' not in file, os.listdir(test_path)))
-        image_args = [[img, test_path] for img in image_files]
+        image_args = [[img, test_path] for img in image_files][:1]
 
         with tqdm(total=len(image_args), desc="Processing V* "+test_type) as pbar:
             for result in pool.imap(process, image_args):
