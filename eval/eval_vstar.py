@@ -246,8 +246,8 @@ def process(img_arg):
                 ]
                 print_messages.extend(p_message)
                 turn_idx += 1
-                print(f"Turn idx: {turn_idx}")
-                print(f"Turn ctx: {response_message}")
+                # print(f"Turn idx: {turn_idx}")
+                # print(f"Turn ctx: {response_message}")
             else:
                 p_message =[
                     {
@@ -288,7 +288,7 @@ if __name__ == "__main__":
         test_path = os.path.join(vstar_bench_path, test_type)
         pool = multiprocessing.Pool(processes=args.num_workers)
         image_files = list(filter(lambda file: '.json' not in file, os.listdir(test_path)))
-        image_args = [[img, test_path] for img in image_files][:1]
+        image_args = [[img, test_path] for img in image_files]
 
         with tqdm(total=len(image_args), desc="Processing V* "+test_type) as pbar:
             for result in pool.imap(process, image_args):
