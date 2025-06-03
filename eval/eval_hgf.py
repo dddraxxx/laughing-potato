@@ -19,8 +19,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--model_name', type=str, default='qwen', help='Model name for result save')
 parser.add_argument('--api_key', type=str, default='EMPTY', help='API key')
 parser.add_argument('--api_url', type=str, default='http://localhost:18900/v1', help='API URL')
-parser.add_argument('--vstar_bench_path', type=str, default='/home/ubuntu/work/eval_data/vstar_bench/', help='Path to the V* benchmark')
-parser.add_argument('--save_path', type=str, default='./eval_results', help='Path to save the results')
+parser.add_argument('--hgf_bench_path', type=str, default='lmms-lab/MME', help='Path to the HGF benchmark')
+parser.add_argument('--save_path', type=str, default='./eval_results/hgf', help='Path to save the results')
 parser.add_argument('--eval_model_name', type=str, default=None, help='Model name for evaluation')
 parser.add_argument('--num_workers', type=int, default=1)
 args = parser.parse_args()
@@ -40,7 +40,7 @@ if args.eval_model_name is None:
 else:
     eval_model_name = args.eval_model_name
 
-vstar_bench_path = args.vstar_bench_path
+hgf_bench_path = args.hgf_bench_path
 save_path = args.save_path
 save_path = os.path.join(save_path, args.model_name)
 os.makedirs(save_path, exist_ok=True)
@@ -119,23 +119,34 @@ def smart_resize(
     return h_bar, w_bar
 
 
-def process(img_arg):
-    img, test_path = img_arg
-    img_path = os.path.join(test_path, img)
-    anno_path = os.path.join(test_path, img.replace('.jpg', '.json'))
-    with open(anno_path, 'r') as f:
-        anno = json.load(f)
-    question = anno['question']
-    options = anno['options']
+def process(data_item):
+    # Extract data from HGF dataset item
+    question_id = data_item['question_id']
+    pil_img = data_item['image']
+    question = data_item['question']
+    answer = data_item['answer']
+    category = data_item['category']
+
+    # For MME dataset, we need to create options from the answer
+    # MME is typically Yes/No questions, so we create binary options
+    if answer.lower() in ['yes', 'no']:
+        options = ['Yes', 'No']
+        # Set correct answer as first option for consistency
+        if answer.lower() == 'yes':
+            options = ['Yes', 'No']
+        else:
+            options = ['No', 'Yes']
+    else:
+        # For other types, use the answer as the single correct option
+        options = [answer]
 
     option_str = "\n"
     for i in range(len(options)):
         option_str += abc_map[i + 1] + '. ' + options[i] + '\n'
 
     prompt = instruction_prompt_before.format(question=question, options=option_str)
-    pil_img = Image.open(img_path)
 
-    base64_image = encode_image_to_base64(img_path)
+    base64_image = encode_pil_image_to_base64(pil_img)
 
     messages = [
         {
@@ -270,9 +281,10 @@ def process(img_arg):
         output_text = response_message
 
     save_info = {}
-    save_info['image'] = img
+    save_info['question_id'] = question_id
     save_info['question'] = question
-    save_info['answer'] = anno['options'][0]
+    save_info['answer'] = answer
+    save_info['category'] = category
     save_info['pred_ans'] = output_text
     save_info['pred_output'] = print_messages
     save_info['status'] = status
@@ -280,18 +292,23 @@ def process(img_arg):
 
 
 if __name__ == "__main__":
-    test_types = ['direct_attributes', 'relative_position']
+    from datasets import load_dataset
+    dataset = load_dataset(args.hgf_bench_path)
+    test_types = ['test']
+    filter_categories = ['poster', 'celebrity', 'scene', 'landmark', 'artwork']
 
     for test_type in test_types:
         save_name = f"result_{test_type}_{args.model_name}.jsonl"
         save_json = []
-        test_path = os.path.join(vstar_bench_path, test_type)
+        test_data = dataset[test_type]
+        test_data = test_data.filter(lambda x: x['category'] not in filter_categories, num_proc=args.num_workers)
         pool = multiprocessing.Pool(processes=args.num_workers)
-        image_files = list(filter(lambda file: '.json' not in file, os.listdir(test_path)))
-        image_args = [[img, test_path] for img in image_files]
 
-        with tqdm(total=len(image_args), desc="Processing V* "+test_type) as pbar:
-            for result in pool.imap(process, image_args):
+        # Convert dataset items to list for multiprocessing
+        data_items = [test_data[i] for i in range(len(test_data))]
+
+        with tqdm(total=len(data_items), desc="Processing HGF "+test_type) as pbar:
+            for result in pool.imap(process, data_items):
                 if result is not None:
                     save_json.append(result)
                     pbar.update(1)
