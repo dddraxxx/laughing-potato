@@ -4,7 +4,8 @@ PROJECT_NAME="agent_vlagent"
 EXPERIMENT_NAME="debug_for_single_node"
 
 homedir=$HOME
-export SAVE_CHECKPOINT_DIR="${homedir}/work/verl_checkpoints"
+date_str=$(date +%Y%m%d)
+export SAVE_CHECKPOINT_DIR="${homedir}/work/verl_logs/${date_str}"
 # export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues
 export REF_MODEL_PATH="${homedir}/work/backbone/qwen25/Qwen2.5-VL-7B-Instruct"
 export WORLD_SIZE=1
