@@ -20,7 +20,7 @@ parser.add_argument('--model_name', type=str, default='qwen', help='Model name f
 parser.add_argument('--api_key', type=str, default='EMPTY', help='API key')
 parser.add_argument('--api_url', type=str, default='http://localhost:18900/v1', help='API URL')
 parser.add_argument('--vstar_bench_path', type=str, default='/home/ubuntu/work/eval_data/vstar_bench/', help='Path to the V* benchmark')
-parser.add_argument('--save_path', type=str, default='./eval_results', help='Path to save the results')
+parser.add_argument('--save_path', type=str, default='./eval_results/vstar', help='Path to save the results')
 parser.add_argument('--eval_model_name', type=str, default=None, help='Model name for evaluation')
 parser.add_argument('--num_workers', type=int, default=1)
 args = parser.parse_args()
