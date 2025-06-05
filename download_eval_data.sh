@@ -9,3 +9,6 @@ huggingface-cli download --resume-download craigwu/vstar_bench --local-dir $EVAL
 
 # hrbench
 huggingface-cli download --resume-download DreamMr/HR-Bench --local-dir $EVAL_DATA_PATH/hr_bench --local-dir-use-symlinks False --repo-type dataset
+
+# hgf/mme
+huggingface-cli download --resume-download lmms-lab/MME --local-dir $EVAL_DATA_PATH/hgf/mme --local-dir-use-symlinks False --repo-type dataset
