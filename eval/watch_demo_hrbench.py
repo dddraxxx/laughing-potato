@@ -69,46 +69,50 @@ def print_content(content):
         print(format_print_str(line))
 
 def create_crop_visualization(ori_image, bbox_data, image_name, output_dir):
-    """Create visualization image with bounding box drawn and extended crop area"""
+    """Create visualization images with bounding boxes drawn and extended crop areas"""
     if not bbox_data:
-        return None
+        return []
+
+    visualization_paths = []
 
     try:
-        # Use the first bbox for visualization
-        x1, y1, x2, y2 = bbox_data[0]
+        for bbox_idx, bbox in enumerate(bbox_data):
+            x1, y1, x2, y2 = bbox
 
-        # Create a copy of the original image to draw on
-        vis_image = ori_image.copy()
-        draw = ImageDraw.Draw(vis_image)
+            # Create a copy of the original image to draw on
+            vis_image = ori_image.copy()
+            draw = ImageDraw.Draw(vis_image)
 
-        # Draw bounding box with width 5 (red color)
-        box_width = 5
-        for i in range(box_width):
-            draw.rectangle([x1-i, y1-i, x2+i, y2+i], outline='red', fill=None)
+            # Draw bounding box with width 5 (red color)
+            box_width = 5
+            for i in range(box_width):
+                draw.rectangle([x1-i, y1-i, x2+i, y2+i], outline='red', fill=None)
 
-        # Calculate extended crop area (256 pixels on each side)
-        img_width, img_height = ori_image.size
-        extend_pixels = 256
+            # Calculate extended crop area (256 pixels on each side)
+            img_width, img_height = ori_image.size
+            extend_pixels = 256
 
-        crop_x1 = max(0, x1 - extend_pixels)
-        crop_y1 = max(0, y1 - extend_pixels)
-        crop_x2 = min(img_width, x2 + extend_pixels)
-        crop_y2 = min(img_height, y2 + extend_pixels)
+            crop_x1 = max(0, x1 - extend_pixels)
+            crop_y1 = max(0, y1 - extend_pixels)
+            crop_x2 = min(img_width, x2 + extend_pixels)
+            crop_y2 = min(img_height, y2 + extend_pixels)
 
-        # Crop the extended area from the visualization image
-        crop_vis_image = vis_image.crop((crop_x1, crop_y1, crop_x2, crop_y2))
+            # Crop the extended area from the visualization image
+            crop_vis_image = vis_image.crop((crop_x1, crop_y1, crop_x2, crop_y2))
 
-        # Save the crop visualization
-        vis_filename = f"{image_name.replace('.jpg', '')}_crop_visualization.jpg"
-        vis_path = os.path.join(output_dir, 'images', 'cropped', vis_filename)
-        Path(vis_path).parent.mkdir(parents=True, exist_ok=True)
-        crop_vis_image.save(vis_path)
+            # Save the crop visualization
+            vis_filename = f"{image_name.replace('.jpg', '')}_crop_visualization_{bbox_idx}.jpg"
+            vis_path = os.path.join(output_dir, 'images', 'cropped', vis_filename)
+            Path(vis_path).parent.mkdir(parents=True, exist_ok=True)
+            crop_vis_image.save(vis_path)
 
-        return vis_path
+            visualization_paths.append(vis_path)
 
     except Exception as e:
         print(f"Error creating crop visualization for {image_name}: {e}")
-        return None
+        return []
+
+    return visualization_paths
 
 def extract_thinking_data(ori_image, conversation, image_name, output_dir):
     """Extract thinking process data and save cropped images"""
@@ -207,19 +211,23 @@ def format_dialogue_string(pred_output):
             content_text = str(content)
 
         # Replace actual newlines with literal \n
+        content_text = content_text.rstrip('\n')
         content_text = content_text.replace('\n', '\\n')
 
         # Format the turn with bold and red role
         role_html = f'<span style="color: red; font-weight: bold;">{role}</span>'
         # Escape angle brackets to prevent HTML tag rendering in content_text
         content_text_escaped = content_text.replace('<', '&lt;').replace('>', '&gt;')
+        # context_text may have many \n in the end, strip all of them
+
         dialogue_parts.append(f'{role_html}: "{content_text_escaped}"')
 
     return '<br>'.join(dialogue_parts)
 
 # %%
 # Configuration - you can change these paths as needed
-DATASET_VERSION = '8k'  # Change to '4k' if you want to use the 4k version
+import os
+DATASET_VERSION = os.environ.get('ver', '8k')  # Change to '4k' if you want to use the 4k version
 output_base_dir = f'/home/ubuntu/work/laughing-potato/eval/output_data/hrbench/{DATASET_VERSION}'
 
 # Multi-threading configuration
@@ -339,8 +347,8 @@ def process_case(result_idx, result_data, output_dir):
     # Extract thinking data and save cropped images
     thinking_data = extract_thinking_data(actual_image, pred_output, image_name, output_dir)
 
-    # Create crop visualization with bounding box
-    crop_visualization_path = create_crop_visualization(
+    # Create crop visualizations with bounding boxes
+    crop_visualization_paths = create_crop_visualization(
         actual_image, thinking_data['bbox_coordinates'], image_name, output_dir
     )
 
@@ -370,7 +378,7 @@ def process_case(result_idx, result_data, output_dir):
         'annotated_image_path': annotated_path,
         'cropped_images_paths': json.dumps(thinking_data['cropped_images_paths']),
         'bbox_coordinates': json.dumps(thinking_data['bbox_coordinates']),
-        'crop_visualization_path': crop_visualization_path,
+        'crop_visualization_paths': json.dumps(crop_visualization_paths),
         'thinking_conversation': thinking_data['thinking_conversation']
     }
 
@@ -602,7 +610,7 @@ def create_markdown_report(df, summary_stats, output_dir):
     # Table configuration
     display_columns = ['index', 'question', 'answer_choices', 'correct_answer_choice',
                       'predicted_choice', 'full_pred_output', 'is_correct', 'turn_depth', 'category',
-                      'full_image_saved_path', 'cropped_images_paths', 'crop_visualization_path']
+                      'full_image_saved_path', 'cropped_images_paths', 'crop_visualization_paths']
 
     column_names = {
         'index': 'Index',
@@ -616,13 +624,13 @@ def create_markdown_report(df, summary_stats, output_dir):
         'category': 'Category',
         'full_image_saved_path': 'Image',
         'cropped_images_paths': 'Cropped Regions',
-        'crop_visualization_path': 'Crop in Image'
+        'crop_visualization_paths': 'Crop in Image'
     }
 
     formatters = {
         'Image': lambda x: format_image_path(x, 150, 150),
         'Cropped Regions': lambda x: format_cropped_images(x, 100, 100),
-        'Crop in Image': lambda x: format_image_path(x, 200, 200) if x and not pd.isna(x) else '',
+        'Crop in Image': lambda x: format_cropped_images(x, 150, 150),
         'Result': format_correctness,
         'Choices': format_answer_choices,
         'Question': lambda x: x if not pd.isna(x) else '',
@@ -756,7 +764,7 @@ def create_markdown_report(df, summary_stats, output_dir):
     md_content.append("| annotated_image_path | string | Path to annotated image |")
     md_content.append("| cropped_images_paths | JSON string | List of cropped image paths |")
     md_content.append("| bbox_coordinates | JSON string | Predicted bounding box coordinates |")
-    md_content.append("| crop_visualization_path | string | Path to crop visualization with bounding box and 256px context |")
+    md_content.append("| crop_visualization_paths | JSON string | List of paths to crop visualizations with bounding boxes and 256px context |")
     md_content.append("| thinking_conversation | string | Full conversation text |")
     md_content.append("")
 
