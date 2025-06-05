@@ -157,7 +157,8 @@ def extract_thinking_data(ori_image, conversation, image_name, output_dir):
                         _crop_img = ori_image.crop((x1, y1, x2, y2))
 
                         # Save cropped image
-                        crop_filename = f"{image_name.replace('.jpg', '')}_crop_{bbox_idx}.jpg"
+                        idx = len(cropped_paths)
+                        crop_filename = f"{image_name.replace('.jpg', '')}_crop_{idx}.jpg"
                         crop_path = os.path.join(output_dir, 'cropped', crop_filename)
                         Path(crop_path).parent.mkdir(parents=True, exist_ok=True)
                         _crop_img.save(crop_path)
@@ -227,7 +228,7 @@ def format_dialogue_string(pred_output):
 # %%
 # Configuration - you can change these paths as needed
 import os
-DATASET_VERSION = os.environ.get('ver', '8k')  # Change to '4k' if you want to use the 4k version
+DATASET_VERSION = os.environ.get('ver', '4k')  # Change to '4k' if you want to use the 4k version
 output_base_dir = f'/home/ubuntu/work/laughing-potato/eval/output_data/hrbench/{DATASET_VERSION}'
 
 # Multi-threading configuration
