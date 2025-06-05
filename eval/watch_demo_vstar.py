@@ -163,17 +163,21 @@ def format_dialogue_string(pred_output):
 # %%
 # Create output directories
 output_base_dir = '/home/ubuntu/work/laughing-potato/eval/output_data'
-os.makedirs(os.path.join(output_base_dir, 'images', 'full'), exist_ok=True)
-os.makedirs(os.path.join(output_base_dir, 'images', 'cropped'), exist_ok=True)
-os.makedirs(os.path.join(output_base_dir, 'images', 'annotated'), exist_ok=True)
-
+output_base_dir = os.path.join(output_base_dir, 'vstar_bench')
 root_path = '/home/ubuntu/work/eval_data/vstar_bench'
 json_path = '/home/ubuntu/work/laughing-potato/eval_results/vstar/qwen/result_direct_attributes_qwen.jsonl'
+# json_path = '/home/ubuntu/work/laughing-potato/eval_results/vstar/qwen/result_relative_position_qwen.jsonl'
+
 
 if 'direct_attributes' in json_path:
     root_path = os.path.join(root_path, 'direct_attributes')
+    output_base_dir = os.path.join(output_base_dir, 'direct_attributes')
 else:
     root_path = os.path.join(root_path, 'relative_position')
+    output_base_dir = os.path.join(output_base_dir, 'relative_position')
+os.makedirs(os.path.join(output_base_dir, 'images', 'full'), exist_ok=True)
+os.makedirs(os.path.join(output_base_dir, 'images', 'cropped'), exist_ok=True)
+os.makedirs(os.path.join(output_base_dir, 'images', 'annotated'), exist_ok=True)
 
 
 # %%
@@ -547,18 +551,6 @@ def create_markdown_report(df, summary_stats, output_dir):
 
     formatters = get_table_formatters()
 
-    # Best cases (high IoU and correct)
-    best_cases = df[(df['is_correct'] == True) & (df['max_iou_score'] > 0.7)]
-    if len(best_cases) > 0:
-        print(f"Best cases: {len(best_cases)}")
-        best_cases = best_cases.sample(5, random_state=42)
-        md_content.append("### Best Performing Cases (Correct + High IoU)\n")
-
-        best_display = best_cases[display_columns].copy().rename(columns=column_names)
-        styled_table = generate_styled_table(best_display, 'best-cases-table', formatters)
-        md_content.append(styled_table)
-        md_content.append("")
-
     # Wrong cases (incorrect)
     wrong_cases = df[(df['is_correct'] == False)]
     if len(wrong_cases) > 0:
@@ -580,6 +572,18 @@ def create_markdown_report(df, summary_stats, output_dir):
 
         challenging_display = challenging_cases[display_columns].copy().rename(columns=column_names)
         styled_table = generate_styled_table(challenging_display, 'challenging-cases-table', formatters)
+        md_content.append(styled_table)
+        md_content.append("")
+
+    # Best cases (high IoU and correct)
+    best_cases = df[(df['is_correct'] == True) & (df['max_iou_score'] > 0.7)]
+    if len(best_cases) > 0:
+        print(f"Best cases: {len(best_cases)}")
+        best_cases = best_cases.sample(2, random_state=42)
+        md_content.append("### Best Performing Cases (Correct + High IoU)\n")
+
+        best_display = best_cases[display_columns].copy().rename(columns=column_names)
+        styled_table = generate_styled_table(best_display, 'best-cases-table', formatters)
         md_content.append(styled_table)
         md_content.append("")
 
@@ -608,7 +612,7 @@ def create_markdown_report(df, summary_stats, output_dir):
     # File Structure
     md_content.append("## Generated Files Structure\n")
     md_content.append("```")
-    md_content.append("output_data/")
+    md_content.append(f"{output_base_dir}/")
     md_content.append("├── analysis_results.csv       # Main dataframe")
     md_content.append("├── analysis_report.md         # This report")
     md_content.append("└── images/")
