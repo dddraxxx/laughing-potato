@@ -115,10 +115,25 @@ def create_crop_visualization(ori_image, bbox_data, image_name, output_dir):
 
     return visualization_paths
 
+def extract_text_content(content):
+    """Extract text content from various content formats"""
+    if isinstance(content, str):
+        return content
+    elif isinstance(content, list):
+        text_parts = []
+        for item in content:
+            if isinstance(item, dict) and item.get('type') == 'text':
+                text_parts.append(item.get('text', ''))
+            elif isinstance(item, str):
+                text_parts.append(item)
+        return ' '.join(text_parts)
+    else:
+        return str(content)
+
 def extract_thinking_data(ori_image, conversation, image_name, output_dir):
     """Extract thinking process data and save cropped images"""
     turn_depth = 0
-    thinking_text = []
+    thinking_turns = []
     bbox_data = []
     cropped_paths = []
 
@@ -133,18 +148,18 @@ def extract_thinking_data(ori_image, conversation, image_name, output_dir):
                     _content = _content['text']
                     # Extract just the question part
                     question_part = _content.split('\n')[0] if '\n' in _content else _content
-                    thinking_text.append(f"USER: {question_part}")
+                    thinking_turns.append({"role": "user", "content": question_part})
         elif conv_role == 'assistant':
-            if isinstance(content, str):
-                _content = content
-            elif isinstance(content, list):
-                for _content in content:
-                    if _content['type'] == 'text':
-                        _content = _content['text']
-            else:
+            _content = extract_text_content(content)
+            if not _content:
                 continue
 
-
+            turn_depth += 1
+            user_last = False
+            if "<answer>" in _content and "</answer>" in _content:
+                _content = _content[:_content.rfind("</answer>")]
+                thinking_turns.append({"role": "assistant", "content": _content})
+                break
             # Look for tool calls with image_zoom_in_tool
             if "<tool_call>" in _content and "image_zoom_in_tool" in _content:
                 try:
@@ -169,31 +184,18 @@ def extract_thinking_data(ori_image, conversation, image_name, output_dir):
                 except Exception as e:
                     print(f"Error processing bbox for {image_name}: {e}")
 
-            turn_depth += 1
-            user_last = False
-            if "The handle of the spoon is visible outside the bowl's rim." in _content:
-                print(_content)
-            if "<answer>" in _content and "</answer>" in _content:
-                _content = _content[:_content.rfind("</answer>")]
-                thinking_text.append(f"ASSISTANT: {_content}")
-                break
-            thinking_text.append(f"ASSISTANT: {_content}")
+            thinking_turns.append({"role": "assistant", "content": _content})
         else:
-            if isinstance(content, str):
-                _content = content
-            elif isinstance(content, list):
-                for _content in content:
-                    if _content['type'] == 'text':
-                        _content = _content['text']
-            else:
+            _content = extract_text_content(content)
+            if not _content:
                 continue
-            thinking_text.append(f"USER: {_content}")
+            thinking_turns.append({"role": "user", "content": _content})
             user_last = True
     if user_last:
         print("Wrong")
     return {
         'turn_depth': turn_depth,
-        'thinking_conversation': '\n\n'.join(thinking_text),
+        'thinking_conversation': thinking_turns,
         'bbox_coordinates': bbox_data,
         'cropped_images_paths': cropped_paths
     }
@@ -207,20 +209,9 @@ def format_dialogue_string(pred_output):
         content = turn['content']
         if role == 'system':
             continue
-        # Handle different content formats
-        if isinstance(content, str):
-            content_text = content
-        elif isinstance(content, list):
-            # Extract text from list format
-            text_parts = []
-            for item in content:
-                if isinstance(item, dict) and item.get('type') == 'text':
-                    text_parts.append(item.get('text', ''))
-                elif isinstance(item, str):
-                    text_parts.append(item)
-            content_text = ' '.join(text_parts)
-        else:
-            content_text = str(content)
+
+        # Use the shared content extraction function
+        content_text = extract_text_content(content)
 
         # Replace actual newlines with literal \n
         content_text = content_text.rstrip('\n')
@@ -366,7 +357,6 @@ def process_case(result_idx, result_data, output_dir):
         'question': question,
         'correct_answer': correct_answer,
         'predicted_answer': pred_ans,
-        'full_pred_output': format_dialogue_string(pred_output),
         'is_correct': is_correct,
         'category': category,
         'status': status,
@@ -376,7 +366,8 @@ def process_case(result_idx, result_data, output_dir):
         'cropped_images_paths': json.dumps(thinking_data['cropped_images_paths']),
         'bbox_coordinates': json.dumps(thinking_data['bbox_coordinates']),
         'crop_visualization_paths': json.dumps(crop_visualization_paths),
-        'thinking_conversation': thinking_data['thinking_conversation']
+        'thinking_conversation': format_dialogue_string(thinking_data['thinking_conversation']),
+        'full_pred_output': format_dialogue_string(thinking_data['thinking_conversation']),
     }
 
 # Main processing loop with multi-threading
