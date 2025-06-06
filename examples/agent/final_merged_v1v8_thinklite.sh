@@ -3,9 +3,19 @@ set -x
 PROJECT_NAME="agent_vlagent"
 EXPERIMENT_NAME="debug_for_single_node"
 
-homedir=$HOME
+homedir=$(readlink -f "${home:-$HOME}")
 date_str=$(date +%Y%m%d)
-export SAVE_CHECKPOINT_DIR="${homedir}/work/verl_logs/${date_str}"
+export LLM_AS_A_JUDGE_BASE="http://10.0.127.192:18901/v1"
+
+# if /checkpoints-fsx/doqihu exists, use it
+if [ -d "/checkpoints-fsx/doqihu" ]; then
+    checkpoint_dir="/checkpoints-fsx/doqihu/verl_logs/${date_str}"
+    ln -s ${checkpoint_dir} ${homedir}/work/verl_logs/${date_str}
+else
+    checkpoint_dir="${homedir}/work/verl_logs/${date_str}"
+fi
+export SAVE_CHECKPOINT_DIR="${checkpoint_dir}"
+
 # export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues
 export REF_MODEL_PATH="${homedir}/work/backbone/qwen25/Qwen2.5-VL-7B-Instruct"
 export WORLD_SIZE=1
