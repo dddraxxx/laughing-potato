@@ -10,6 +10,7 @@ export LLM_AS_A_JUDGE_BASE="http://10.0.127.192:18901/v1"
 # if /checkpoints-fsx/doqihu exists, use it
 if [ -d "/checkpoints-fsx/doqihu" ]; then
     checkpoint_dir="/checkpoints-fsx/doqihu/verl_logs/${date_str}"
+    mkdir -p ${homedir}/work/verl_logs
     ln -s ${checkpoint_dir} ${homedir}/work/verl_logs/${date_str}
 else
     checkpoint_dir="${homedir}/work/verl_logs/${date_str}"
