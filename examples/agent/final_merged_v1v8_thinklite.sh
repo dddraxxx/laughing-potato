@@ -1,10 +1,11 @@
 set -x
+source env.sh
 
 PROJECT_NAME="agent_vlagent"
 EXPERIMENT_NAME="debug_for_single_node"
 
 homedir=$(readlink -f "${home:-$HOME}")
-date_str=$(date +%Y%m%d)
+date_str=$(date +%Y%m%d_%H%M%S)
 export LLM_AS_A_JUDGE_BASE="http://10.0.127.192:18901/v1"
 
 # if /checkpoints-fsx/doqihu exists, use it
@@ -28,6 +29,10 @@ VISUAL_DATASET_TRAIN_0_8=${BASEDIR}/data_v0.8_visual_toolbox_v2.parquet
 VISUAL_DATASET_TEST=${BASEDIR}/seekworld_test.parquet
 EUREKA_DATASET_TRAIN=${BASEDIR}/data_thinklite_reasoning_acc.parquet
 
+mkdir -p ${SAVE_CHECKPOINT_DIR}/logs
+
+# train_batch_size * rollout.n
+# ppo_mini_batch_size * rollout.n
 PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     +debug=False \
     +vs_debug=False \
@@ -44,7 +49,7 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.actor.ppo_mini_batch_size=256 \
-    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=4 \
+    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=16 \
     actor_rollout_ref.actor.use_kl_loss=False \
     actor_rollout_ref.actor.kl_loss_coef=0.0 \
     actor_rollout_ref.actor.kl_loss_type=low_var_kl \
@@ -82,4 +87,4 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     trainer.default_local_dir=${SAVE_CHECKPOINT_DIR}/${PROJECT_NAME}/${EXPERIMENT_NAME} \
     +trainer.tensorboard_dir=${SAVE_CHECKPOINT_DIR}/logs/tensorboard \
     +trainer.rl_logging_board_dir=${SAVE_CHECKPOINT_DIR}/logs/rl_logging_board \
-    trainer.total_epochs=32 2>&1 | tee ./logs/${EXPERIMENT_NAME}.log
+    trainer.total_epochs=32 2>&1 | tee ${SAVE_CHECKPOINT_DIR}/logs/${EXPERIMENT_NAME}.log
