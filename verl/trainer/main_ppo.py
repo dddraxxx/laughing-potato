@@ -72,6 +72,8 @@ def run_ppo(config) -> None:
         runtime_env={
             "env_vars": {"TOKENIZERS_PARALLELISM": "true", "NCCL_DEBUG": "WARN", "VLLM_LOGGING_LEVEL": "WARN"}
         }
+        if config.get("env", {}):
+            runtime_env["env_vars"].update(config.env)
         if config.vs_debug:
             runtime_env["env_vars"]["RAY_DEBUG"] = "1"
             runtime_env["env_vars"]["RAY_DEBUG_POST_MOTERM"] = "1"
@@ -83,6 +85,7 @@ def run_ppo(config) -> None:
             runtime_env=runtime_env,
             num_cpus=config.ray_init.num_cpus,
         )
+        print("\033[91mruntime_env", runtime_env,"\033[0m")
 
 
     runner = TaskRunner.remote()

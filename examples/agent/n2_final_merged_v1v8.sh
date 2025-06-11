@@ -1,12 +1,38 @@
 set -x
 source env.sh
 
+export WORLD_SIZE=2
+head_node_idx=2
+HEAD_ADDR="10.0.116.147"
+HEAD_PORT=6379
+
+export LLM_AS_A_JUDGE_BASE="http://10.0.127.192:18901/v1"
+
+if [ "${HOSTNAME##*-}" -eq ${head_node_idx} ]; then
+    ## If this is the host node, start Ray server and wait for other nodes to join
+    ray start --head --port=$HEAD_PORT
+    until [ "$(ray status | grep node_ | wc -l | awk '{print $1}')" -eq $WORLD_SIZE ]; do
+        echo "waiting for all workers up..."
+        sleep 10
+    done
+else
+    ## Check TCP connection to the host address and port
+    # echo "Waiting for head node (${HEAD_ADDR}:${HEAD_PORT}) to become reachable..."
+    # until (echo > /dev/tcp/${HEAD_ADDR}/${HEAD_PORT}) >/dev/null 2>&1; do
+    #     sleep 5
+    # done
+    ## When the host is reachable, join the Ray cluster.
+    echo "Head node is reachable, starting ray worker..."
+    ray start --address="${HEAD_ADDR}:${HEAD_PORT}" # --block
+    # end the script
+    exit 0
+fi
+
 PROJECT_NAME="agent_vlagent"
-EXPERIMENT_NAME="debug_for_single_node"
+EXPERIMENT_NAME="two_node"
 
 homedir=$(readlink -f "${home:-$HOME}")
 date_str=$(date +%Y%m%d_%H%M%S)
-export LLM_AS_A_JUDGE_BASE="http://10.0.127.192:18901/v1"
 
 # if /checkpoints-fsx/doqihu exists, use it
 if [ -d "/checkpoints-fsx/doqihu" ]; then
@@ -20,7 +46,6 @@ export SAVE_CHECKPOINT_DIR="${checkpoint_dir}"
 
 # export VLLM_ATTENTION_BACKEND=XFORMERS # vllm + qwen2-7b with flash_attn has some issues
 export REF_MODEL_PATH="${homedir}/work/backbone/qwen25/Qwen2.5-VL-7B-Instruct"
-export WORLD_SIZE=1
 
 BASEDIR="${homedir}/work/data"
 VISUAL_DATASET_TRAIN_0_6_2=${BASEDIR}/data_v0.6.2_reason.parquet
@@ -36,6 +61,7 @@ mkdir -p ${SAVE_CHECKPOINT_DIR}/logs
 PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     +debug=False \
     +vs_debug=False \
+    +env.LLM_AS_A_JUDGE_BASE=${LLM_AS_A_JUDGE_BASE} \
     data.train_files=[${VISUAL_DATASET_TRAIN_0_1_2},${VISUAL_DATASET_TRAIN_0_8},${EUREKA_DATASET_TRAIN}] \
     data.val_files=[${EUREKA_DATASET_TRAIN}] \
     data.train_batch_size=256 \
@@ -49,7 +75,7 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.actor.ppo_mini_batch_size=256 \
-    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=8 \
+    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=16 \
     actor_rollout_ref.actor.use_kl_loss=False \
     actor_rollout_ref.actor.kl_loss_coef=0.0 \
     actor_rollout_ref.actor.kl_loss_type=low_var_kl \

@@ -7,26 +7,50 @@ import os
 from math_verify import parse, verify
 
 openai_api_key = "EMPTY"
-openai_api_base_list = [
-    # "http://172.30.52.123:8000/v1",
-    # "http://10.39.3.123:18901/v1",
-    os.environ.get("LLM_AS_A_JUDGE_BASE", "http://ec2-34-227-102-124.compute-1.amazonaws.com:18901/v1"),
-]
 
-client_list = []
-for api_base in openai_api_base_list:
-    client = OpenAI(
-        api_key=openai_api_key,
-        base_url=api_base,
-    )
-    client_list.append(client)
-model_name_list = []
-for client in client_list:
-    response = requests.get(f"{api_base}/models")
-    models = response.json()
-    model_name_list.append(models['data'][0]['id'])
+# Global cache for clients and current API base
+_cached_clients = None
+_cached_model_names = None
+_cached_api_base = None
 
+def get_clients_and_models():
+    """
+    Lazily initialize OpenAI clients and model names.
+    Re-initializes if LLM_AS_A_JUDGE_BASE environment variable changes.
+    """
+    global _cached_clients, _cached_model_names, _cached_api_base
 
+    current_api_base = os.environ.get("LLM_AS_A_JUDGE_BASE", "http://ec2-34-227-102-124.compute-1.amazonaws.com:18901/v1")
+
+    # Return cached clients if environment hasn't changed
+    if _cached_clients is not None and _cached_api_base == current_api_base:
+        return _cached_clients, _cached_model_names
+
+    # Initialize clients for the current API base
+    print(f"Initializing OpenAI clients for API base: {current_api_base}")
+
+    openai_api_base_list = [current_api_base]
+
+    client_list = []
+    for api_base in openai_api_base_list:
+        client = OpenAI(
+            api_key=openai_api_key,
+            base_url=api_base,
+        )
+        client_list.append(client)
+
+    model_name_list = []
+    for client in client_list:
+        response = requests.get(f"{current_api_base}/models")
+        models = response.json()
+        model_name_list.append(models['data'][0]['id'])
+
+    # Cache the results
+    _cached_clients = client_list
+    _cached_model_names = model_name_list
+    _cached_api_base = current_api_base
+
+    return client_list, model_name_list
 
 def get_chat_template():
     chat_template = """
@@ -219,6 +243,7 @@ def compute_score(predict_str: str, ground_truth: str, extra_info=None) -> float
     question_text = extra_info['question']
     full_prompt = get_prompt(answer_text, ground_truth, question_text)
 
+    client_list, model_name_list = get_clients_and_models()
     client_idx = random.randint(0, len(client_list) - 1)
     client = client_list[client_idx]
     model_name = model_name_list[client_idx]
@@ -304,6 +329,7 @@ def compute_common_reasoning(predict_str: str, ground_truth: str, extra_info=Non
         is_format_error = True
     else:
         question_text = extra_info['question']
+        client_list, model_name_list = get_clients_and_models()
         client_idx = random.randint(0, len(client_list) - 1)
         client = client_list[client_idx]
         model_name = model_name_list[client_idx]
@@ -349,6 +375,7 @@ def rule_math_verify(ground_truth, model_answer):
 
 
 def generative_verify(query, ground_truth, model_answer):
+    client_list, model_name_list = get_clients_and_models()
     client_idx = random.randint(0, len(client_list) - 1)
     client = client_list[client_idx]
     model_name = model_name_list[client_idx]
