@@ -1,5 +1,11 @@
 source env.sh
-export EVAL_DATA_PATH="${home}/work/eval_data"
+if [ -d "/data/doqihu" ]; then
+    export EVAL_DATA_PATH="/data/doqihu/work/eval_data"
+    mkdir -p $EVAL_DATA_PATH
+    ln -s $EVAL_DATA_PATH "${home}/work/eval_data"
+else
+    export EVAL_DATA_PATH="${home}/work/eval_data"
+fi
 
 mkdir -p $EVAL_DATA_PATH
 

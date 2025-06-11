@@ -75,6 +75,9 @@ def run_ppo(config) -> None:
         if config.vs_debug:
             runtime_env["env_vars"]["RAY_DEBUG"] = "1"
             runtime_env["env_vars"]["RAY_DEBUG_POST_MOTERM"] = "1"
+        else:
+            runtime_env["env_vars"]["RAY_DEBUG"] = "0"
+            runtime_env["env_vars"]["RAY_DEBUG_POST_MOTERM"] = "0"
 
         ray.init(
             runtime_env=runtime_env,

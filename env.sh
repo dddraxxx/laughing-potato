@@ -4,3 +4,5 @@ if [ -d /scratch/doqihu ]; then
 else
     home=${:-$HOME}
 fi
+
+export EVAL_DATA_PATH="${home}/work/eval_data"
