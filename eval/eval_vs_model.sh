@@ -7,7 +7,7 @@ echo "Using model: $model_name"
 
 # for vstar,
 python eval/eval_vstar.py
-python eval/watch_demo_vstar.py --modelwname $model_name --dataset_version direct_attributes
+python eval/watch_demo_vstar.py --model_name $model_name --dataset_version direct_attributes
 python eval/watch_demo_vstar.py --model_name $model_name --dataset_version relative_position
 
 # for eval
