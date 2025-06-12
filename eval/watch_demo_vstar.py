@@ -167,8 +167,10 @@ def main():
     parser = argparse.ArgumentParser(description='Process VL Agent evaluation results and generate analysis report')
     parser.add_argument('--home-dir', type=str, default='/scratch/doqihu',
                         help='Home directory path (default: /scratch/doqihu)')
-    parser.add_argument('--model-name', type=str, default='trained_80steps',
+    parser.add_argument('--model_name', type=str, default='trained_80steps',
                         help='Model name for evaluation results (default: trained_80steps)')
+    parser.add_argument('--dataset_version', '-dsv', type=str, default='direct_attributes',
+                        help='Dataset version (default: direct_attributes)')
 
     args = parser.parse_args()
 
@@ -178,16 +180,10 @@ def main():
     output_base_dir = os.path.join(home_dir, f'laughing-potato/eval/output_data/{model_name}')
     output_base_dir = os.path.join(output_base_dir, 'vstar_bench')
     root_path = os.path.join(home_dir, 'work/eval_data/vstar_bench')
-    # json_path = os.path.join(home_dir, f'laughing-potato/eval_results/vstar/{model_name}/result_direct_attributes_qwen.jsonl')
-    json_path = os.path.join(home_dir, f'laughing-potato/eval_results/vstar/{model_name}/result_relative_position_qwen.jsonl')
+    json_path = os.path.join(home_dir, f'laughing-potato/eval_results/vstar/{model_name}/result_{args.dataset_version}_qwen.jsonl')
 
-
-    if 'direct_attributes' in json_path:
-        root_path = os.path.join(root_path, 'direct_attributes')
-        output_base_dir = os.path.join(output_base_dir, 'direct_attributes')
-    else:
-        root_path = os.path.join(root_path, 'relative_position')
-        output_base_dir = os.path.join(output_base_dir, 'relative_position')
+    root_path = os.path.join(root_path, args.dataset_version)
+    output_base_dir = os.path.join(output_base_dir, args.dataset_version)
     os.makedirs(os.path.join(output_base_dir, 'images', 'full'), exist_ok=True)
     os.makedirs(os.path.join(output_base_dir, 'images', 'cropped'), exist_ok=True)
     os.makedirs(os.path.join(output_base_dir, 'images', 'annotated'), exist_ok=True)
@@ -592,7 +588,8 @@ def main():
         best_cases = df[(df['is_correct'] == True) & (df['max_iou_score'] > 0.7)]
         if len(best_cases) > 0:
             print(f"Best cases: {len(best_cases)}")
-            best_cases = best_cases.sample(2, random_state=42)
+            num = min(2, len(best_cases))
+            best_cases = best_cases.sample(num, random_state=42)
             md_content.append("### Best Performing Cases (Correct + High IoU)\n")
 
             best_display = best_cases[display_columns].copy().rename(columns=column_names)

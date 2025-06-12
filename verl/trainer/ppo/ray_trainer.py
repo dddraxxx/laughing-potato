@@ -280,6 +280,7 @@ class RayPPOTrainer:
     ):
         # assert torch.cuda.is_available(), 'cuda must be available on driver'
 
+        breakpoint()
         self.tokenizer = tokenizer
         self.processor = processor
         self.config = config
@@ -913,8 +914,8 @@ class RayPPOTrainer:
         self.global_steps += 1
         last_val_metrics = None
 
-        for epoch in range(self.config.trainer.total_epochs):
-            for batch_dict in self.train_dataloader:
+        for epoch in tqdm(range(self.config.trainer.total_epochs), desc='Epochs', colour='red'):
+            for batch_dict in tqdm(self.train_dataloader, desc='Batches', colour='red'):
                 metrics = {}
                 timing_raw = {}
 
