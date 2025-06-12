@@ -20,7 +20,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--model_name', type=str, default='qwen', help='Model name for result save')
 parser.add_argument('--api_key', type=str, default='EMPTY', help='API key')
 parser.add_argument('--api_url', type=str, default='http://localhost:18900/v1', help='API URL')
-parser.add_argument('--hrbench_path', type=str, default='/home/ubuntu/work/eval_data/hr_bench/', help='Path to the HRBench benchmark')
+parser.add_argument('--hrbench_path', type=str, default='../work/eval_data/hr_bench/', help='Path to the HRBench benchmark')
 parser.add_argument('--save_path', type=str, default='./eval_results/hrbench', help='Path to save the results')
 parser.add_argument('--eval_model_name', type=str, default=None, help='Model name for evaluation')
 parser.add_argument('--num_workers', type=int, default=8)
@@ -44,7 +44,7 @@ else:
 hrbench_path = args.hrbench_path
 test_types = ['hr_bench_4k', 'hr_bench_8k']
 save_path = args.save_path
-save_path = os.path.join(save_path, args.model_name)
+save_path = os.path.join(save_path, eval_model_name)
 os.makedirs(save_path, exist_ok=True)
 
 SYSTEM_PROMPT_V2 = """You are a helpful assistant.

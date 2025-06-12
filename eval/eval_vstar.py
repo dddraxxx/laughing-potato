@@ -42,7 +42,7 @@ else:
 
 vstar_bench_path = args.vstar_bench_path
 save_path = args.save_path
-save_path = os.path.join(save_path, args.model_name)
+save_path = os.path.join(save_path, eval_model_name)
 os.makedirs(save_path, exist_ok=True)
 abc_map = {1: 'A', 2: 'B', 3: 'C', 4: 'D', 5: 'E', 6: 'F'}
 
