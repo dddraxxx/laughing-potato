@@ -20,6 +20,7 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 import torch
+from accelerate import init_empty_weights
 from safetensors.torch import load_file
 from torch.distributed._tensor import Placement, Shard
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForTokenClassification, AutoModelForVision2Seq
@@ -196,7 +197,8 @@ def convert_fsdp_checkpoints_to_hfmodels():
     else:
         raise NotImplementedError(f"Unknown architecture {config['architectures']}")
 
-    with torch.device("meta"):
+    # with torch.device("meta"):
+    with init_empty_weights():
         model = auto_model.from_config(config, torch_dtype=torch.bfloat16)
     model.to_empty(device="cpu")
 

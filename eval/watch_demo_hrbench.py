@@ -1,4 +1,5 @@
 # %%
+import argparse
 import os
 import json
 from pathlib import Path
@@ -228,8 +229,23 @@ def format_dialogue_string(pred_output):
 # %%
 # Configuration - you can change these paths as needed
 import os
-DATASET_VERSION = os.environ.get('ver', '4k')  # Change to '4k' if you want to use the 4k version
-output_base_dir = f'/home/ubuntu/work/laughing-potato/eval/output_data/hrbench/{DATASET_VERSION}'
+
+# Paths
+parser = argparse.ArgumentParser()
+parser.add_argument('--dataset_version', '-dsv', type=str, default='4k', help='Dataset version')
+parser.add_argument('--model_name', '-mn', type=str, default=None, help='Model name')
+args = parser.parse_args()
+
+DATASET_VERSION = args.dataset_version
+MODEL_NAME = args.model_name
+
+home = '/scratch/doqihu'
+if not os.path.exists(home):
+    home = os.environ.get('HOME')
+dataset_path = f'{home}/work/eval_data/hr_bench/hr_bench_{DATASET_VERSION}.tsv'
+json_path = f'{home}/laughing-potato/eval_results/hrbench/{MODEL_NAME}/result_hr_bench_{DATASET_VERSION}_qwen.jsonl'
+
+output_base_dir = f'{home}/laughing-potato/eval/output_data/hrbench/{DATASET_VERSION}'
 
 # Multi-threading configuration
 MAX_WORKERS = None  # Set to None for auto-detection, or specify a number (e.g., 16)
@@ -237,11 +253,6 @@ os.makedirs(os.path.join(output_base_dir, 'images', 'full'), exist_ok=True)
 os.makedirs(os.path.join(output_base_dir, 'images', 'cropped'), exist_ok=True)
 os.makedirs(os.path.join(output_base_dir, 'images', 'annotated'), exist_ok=True)
 os.makedirs(os.path.join(output_base_dir, 'cropped'), exist_ok=True)
-
-# Paths
-dataset_path = f'/home/ubuntu/work/eval_data/hr_bench/hr_bench_{DATASET_VERSION}.tsv'
-json_path = f'/home/ubuntu/work/laughing-potato/eval_results/hrbench/qwen/result_hr_bench_{DATASET_VERSION}_qwen.jsonl'
-
 # %%
 # Load dataset
 print("Loading HR Bench dataset...")
