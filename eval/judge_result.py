@@ -16,7 +16,7 @@ import requests
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_name', type=str, default='qwen', help='Model name for result save')
 parser.add_argument('--api_key', type=str, default='EMPTY', help='API key')
-parser.add_argument('--api_url', type=str, default='http://10.39.19.140:8000/v1', help='API URL')
+parser.add_argument('--api_url', type=str, default='http://10.0.127.192:18901/v1', help='API URL')
 parser.add_argument('--vstar_bench_path', type=str, default=None, help='Path to the V* benchmark')
 parser.add_argument('--save_path', type=str, default=None, help='Path to save the results')
 parser.add_argument('--eval_model_name', type=str, default=None, help='Model name for evaluation')
@@ -224,19 +224,19 @@ if __name__ == '__main__':
                     per_type_acc[test_type].append(acc)
                     if acc_reward != 1.0:
                         error_preds.append({'pred_ans': data['pred_ans'], 'question': data['question'], 'answer': data['answer']})
-                    
+
                     data['acc'] = acc
-                    
+
                     save_json.append(data)
                     pbar.update(1)
 
         pool.close()
         pool.join()
-        
+
         with open(os.path.join(result_root_path, save_name.replace('.jsonl', '_acc.jsonl')), 'w') as f:
             for item in save_json:
                 f.write(json.dumps(item) + '\n')
-                
+
 
     final_acc = {}
     for test_type in test_types:

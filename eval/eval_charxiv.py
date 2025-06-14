@@ -19,8 +19,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--model_name', type=str, default='qwen', help='Model name for result save')
 parser.add_argument('--api_key', type=str, default='EMPTY', help='API key')
 parser.add_argument('--api_url', type=str, default='http://localhost:18900/v1', help='API URL')
-parser.add_argument('--hgf_bench_path', type=str, default='lmms-lab/MME', help='Path to the HGF benchmark')
-parser.add_argument('--save_path', type=str, default='./eval_results/hgf', help='Path to save the results')
+parser.add_argument('--charxiv_bench_path', type=str, default='princeton-nlp/CharXiv', help='Path to the CharXiv benchmark')
+parser.add_argument('--save_path', type=str, default='./eval_results/charxiv', help='Path to save the results')
 parser.add_argument('--eval_model_name', type=str, default=None, help='Model name for evaluation')
 parser.add_argument('--num_workers', type=int, default=1)
 args = parser.parse_args()
@@ -40,11 +40,10 @@ if args.eval_model_name is None:
 else:
     eval_model_name = args.eval_model_name
 
-hgf_bench_path = args.hgf_bench_path
+charxiv_bench_path = args.charxiv_bench_path
 save_path = args.save_path
-save_path = os.path.join(save_path, args.model_name)
+save_path = os.path.join(save_path, eval_model_name)
 os.makedirs(save_path, exist_ok=True)
-abc_map = {1: 'A', 2: 'B', 3: 'C', 4: 'D', 5: 'E', 6: 'F'}
 
 IMAGE_FACTOR = 28
 MIN_PIXELS = 4 * 28 * 28
@@ -72,7 +71,6 @@ Return a json object with function name and arguments within <tool_call></tool_c
 USER_PROMPT_V2 = "\nThink first, call **image_zoom_in_tool** if needed, then answer. Format strictly as:  <think>...</think>  <tool_call>...</tool_call> (if tools needed)  <answer>...</answer> "
 
 instruction_prompt_before = """Question: {question}
-Options: {options}
 """ + USER_PROMPT_V2
 
 user_prompt = USER_PROMPT_V2
@@ -121,30 +119,12 @@ def smart_resize(
 
 def process(data_item):
     # Extract data from HGF dataset item
-    question_id = data_item['question_id']
     pil_img = data_item['image']
-    question = data_item['question']
-    answer = data_item['answer']
+    question = data_item['reasoning_q']
+    answer = data_item['reasoning_a']
     category = data_item['category']
 
-    # For MME dataset, we need to create options from the answer
-    # MME is typically Yes/No questions, so we create binary options
-    if answer.lower() in ['yes', 'no']:
-        options = ['Yes', 'No']
-        # Set correct answer as first option for consistency
-        if answer.lower() == 'yes':
-            options = ['Yes', 'No']
-        else:
-            options = ['No', 'Yes']
-    else:
-        # For other types, use the answer as the single correct option
-        options = [answer]
-
-    option_str = "\n"
-    for i in range(len(options)):
-        option_str += abc_map[i + 1] + '. ' + options[i] + '\n'
-
-    prompt = instruction_prompt_before.format(question=question, options=option_str)
+    prompt = instruction_prompt_before.format(question=question)
 
     base64_image = encode_pil_image_to_base64(pil_img)
 
@@ -281,7 +261,6 @@ def process(data_item):
         output_text = response_message
 
     save_info = {}
-    save_info['question_id'] = question_id
     save_info['question'] = question
     save_info['answer'] = answer
     save_info['category'] = category
@@ -293,21 +272,19 @@ def process(data_item):
 
 if __name__ == "__main__":
     from datasets import load_dataset
-    dataset = load_dataset(args.hgf_bench_path)
-    test_types = ['test']
-    filter_categories = ['poster', 'celebrity', 'scene', 'landmark', 'artwork']
+    dataset = load_dataset(args.charxiv_bench_path)
+    test_types = ['validation']
 
     for test_type in test_types:
         save_name = f"result_{test_type}_{args.model_name}.jsonl"
         save_json = []
         test_data = dataset[test_type]
-        test_data = test_data.filter(lambda x: x['category'] not in filter_categories, num_proc=args.num_workers)
         pool = multiprocessing.Pool(processes=args.num_workers)
 
         # Convert dataset items to list for multiprocessing
         data_items = [test_data[i] for i in range(len(test_data))]
 
-        with tqdm(total=len(data_items), desc="Processing HGF "+test_type) as pbar:
+        with tqdm(total=len(data_items), desc="Processing CharXiv "+test_type) as pbar:
             for result in pool.imap(process, data_items):
                 if result is not None:
                     save_json.append(result)
