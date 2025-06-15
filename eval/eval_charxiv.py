@@ -267,6 +267,7 @@ def process(data_item):
     save_info['pred_ans'] = output_text
     save_info['pred_output'] = print_messages
     save_info['status'] = status
+    save_info['image'] = data_item['figure_path']
     return save_info
 
 

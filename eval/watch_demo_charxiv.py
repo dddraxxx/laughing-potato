@@ -6,49 +6,25 @@ import pandas as pd
 from PIL import Image, ImageDraw
 import numpy as np
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
 # %%
 def format_print_str(long_str, line_length=175):
     formatted_str = '\n'.join([long_str[i:i+line_length] for i in range(0, len(long_str), line_length)])
     return formatted_str
 
-def calculate_iou(box1, box2):
-    x1_1, y1_1, x2_1, y2_1 = box1
-    x1_2, y1_2, x2_2, y2_2 = box2
-
-    x1_inter = max(x1_1, x1_2)
-    y1_inter = max(y1_1, y1_2)
-    x2_inter = min(x2_1, x2_2)
-    y2_inter = min(y2_1, y2_2)
-
-    if x2_inter > x1_inter and y2_inter > y1_inter:
-        area_inter = (x2_inter - x1_inter) * (y2_inter - y1_inter)
-    else:
-        area_inter = 0
-
-    area_box1 = (x2_1 - x1_1) * (y2_1 - y1_1)
-    area_box2 = (x2_2 - x1_2) * (y2_2 - y1_2)
-
-    area_union = area_box1 + area_box2 - area_inter
-
-    if area_union == 0:
-        return 0
-    iou = area_inter / area_union
-    return iou
-
 def print_content(content):
     lines = content.splitlines()
     for line in lines:
         print(format_print_str(line))
 
-
-def extract_thinking_data(ori_image, conversation, ori_gt_boxes, image_name, output_dir):
+def extract_thinking_data(ori_image, conversation, image_name, output_dir):
     """Extract thinking process data and save cropped images"""
     turn_depth = 0
     thinking_text = []
     bbox_data = []
     cropped_paths = []
-    iou_scores = []
     bbox_idx = 0
 
     for idx, conv in enumerate(conversation):
@@ -76,34 +52,25 @@ def extract_thinking_data(ori_image, conversation, ori_gt_boxes, image_name, out
 
             if "<tool_call>" in _content and "</answer>" not in _content:
                 _bbox_str = _content.split("<tool_call>")[1].split("</tool_call>")[0]
-                _bbox = eval(_bbox_str)['arguments']
-                for _box in [_bbox]:
-                    _box = _box['bbox_2d']
-                    x1, y1, x2, y2 = _box
-                    bbox_data.append(_box)
+                try:
+                    _bbox = eval(_bbox_str)['arguments']
+                    for _box in [_bbox]:
+                        _box = _box['bbox_2d']
+                        x1, y1, x2, y2 = _box
+                        bbox_data.append(_box)
 
-                    # Crop and save image
-                    _crop_img = ori_image.crop((x1, y1, x2, y2))
+                        # Crop and save image
+                        _crop_img = ori_image.crop((x1, y1, x2, y2))
 
-                    # Calculate max IoU
-                    max_iou = 0.
-                    for _gt_box in ori_gt_boxes:
-                        _gt_x1, gt_y1, gt_w, gt_h = _gt_box
-                        _gt_x2, gt_y2 = _gt_x1 + gt_w, gt_y1 + gt_h
-                        _gt_box = (_gt_x1, gt_y1, _gt_x2, gt_y2)
-                        iou = calculate_iou(_box, _gt_box)
-                        if iou > max_iou:
-                            max_iou = iou
-
-                    iou_scores.append(max_iou)
-
-                    # Save cropped image
-                    crop_filename = f"{image_name.replace('.jpg', '')}_crop_{bbox_idx}_iou{max_iou:.3f}.jpg"
-                    bbox_idx += 1
-                    crop_path = os.path.join(output_dir, 'cropped', crop_filename)
-                    Path(crop_path).parent.mkdir(parents=True, exist_ok=True)
-                    _crop_img.save(crop_path)
-                    cropped_paths.append(crop_path)
+                        # Save cropped image
+                        crop_filename = f"{image_name.replace('.jpg', '').replace('.png', '')}_crop_{bbox_idx}.jpg"
+                        bbox_idx += 1
+                        crop_path = os.path.join(output_dir, 'cropped', crop_filename)
+                        Path(crop_path).parent.mkdir(parents=True, exist_ok=True)
+                        _crop_img.save(crop_path)
+                        cropped_paths.append(crop_path)
+                except Exception as e:
+                    print(f"Error parsing bbox for {image_name}: {e}")
 
             turn_depth += 1
             if "</answer>" in _content:
@@ -123,9 +90,7 @@ def extract_thinking_data(ori_image, conversation, ori_gt_boxes, image_name, out
         'turn_depth': turn_depth,
         'thinking_conversation': '\n\n'.join(thinking_text),
         'bbox_coordinates': bbox_data,
-        'cropped_images_paths': cropped_paths,
-        'iou_scores': iou_scores,
-        'max_iou_score': max(iou_scores) if iou_scores else 0.0
+        'cropped_images_paths': cropped_paths
     }
 
 def format_dialogue_string(pred_output):
@@ -166,13 +131,15 @@ def format_dialogue_string(pred_output):
 # %%
 # Create output directories
 def main():
-    parser = argparse.ArgumentParser(description='Process VL Agent evaluation results and generate analysis report')
+    parser = argparse.ArgumentParser(description='Process Charxiv evaluation results and generate analysis report')
     parser.add_argument('--home-dir', type=str, default='/scratch/doqihu',
                         help='Home directory path (default: /scratch/doqihu)')
-    parser.add_argument('--model_name', type=str, default='trained_80steps',
-                        help='Model name for evaluation results (default: trained_80steps)')
-    parser.add_argument('--dataset_version', '-dsv', type=str, default='direct_attributes',
-                        help='Dataset version (default: direct_attributes)')
+    parser.add_argument('--model_name', type=str, default='trained_152steps',
+                        help='Model name for evaluation results (default: trained_152steps)')
+    parser.add_argument('--dataset_version', '-dsv', type=str, default='validation',
+                        help='Dataset version (default: validation)')
+    parser.add_argument('--num-workers', type=int, default=8,
+                        help='Number of worker threads for parallel processing (default: 8)')
 
     args = parser.parse_args()
 
@@ -180,16 +147,13 @@ def main():
     model_name = args.model_name
 
     output_base_dir = os.path.join(home_dir, f'laughing-potato/eval/output_data/{model_name}')
-    output_base_dir = os.path.join(output_base_dir, 'vstar_bench')
-    root_path = os.path.join(home_dir, 'work/eval_data/vstar_bench')
-    json_path = os.path.join(home_dir, f'laughing-potato/eval_results/vstar/{model_name}/result_{args.dataset_version}_qwen.jsonl')
+    output_base_dir = os.path.join(output_base_dir, 'charxiv')
+    root_path = os.path.join(home_dir, 'work/eval_data/hgf/charxiv')
+    json_path = os.path.join(home_dir, f'laughing-potato/eval_results/charxiv/{model_name}/result_{args.dataset_version}_qwen_acc.jsonl')
 
-    root_path = os.path.join(root_path, args.dataset_version)
     output_base_dir = os.path.join(output_base_dir, args.dataset_version)
     os.makedirs(os.path.join(output_base_dir, 'images', 'full'), exist_ok=True)
     os.makedirs(os.path.join(output_base_dir, 'images', 'cropped'), exist_ok=True)
-    os.makedirs(os.path.join(output_base_dir, 'images', 'annotated'), exist_ok=True)
-
 
     # %%
     with open(json_path, 'r') as f:
@@ -198,8 +162,11 @@ def main():
     line_map = {}
     image_list = []
     for line in lines:
-        line_map[line['image']] = line
-        image_list.append(line['image'])
+        # Extract image filename from the data
+        if 'image' in line:
+            image_key = line['image']
+            line_map[image_key] = line
+            image_list.append(image_key)
 
     # %%
 
@@ -211,50 +178,25 @@ def main():
         answer = line_map[tosee_img]['answer']
         pred_ans = line_map[tosee_img]['pred_ans']
         pred_output = line_map[tosee_img]['pred_output']
-        correct = answer.lower() in pred_ans.lower()
+        accuracy = line_map[tosee_img].get('acc', 0.0)
+        correct = accuracy == 1.0
 
-        # Load image and ground truth data
+        # Load image
         ori_image_path = os.path.join(root_path, tosee_img)
-        ori_json_path = os.path.join(root_path, tosee_img.replace('.jpg', '.json'))
-        ori_json = json.load(open(ori_json_path, 'r'))
-        ori_gt_name = ori_json['target_object']
-        ori_gt_boxes = ori_json['bbox']
 
-        ori_image = Image.open(ori_image_path)
+        try:
+            ori_image = Image.open(ori_image_path)
+        except Exception as e:
+            print(f"Error loading image {ori_image_path}: {e}")
+            return None
 
         # Save full image
         full_image_path = os.path.join(output_dir, 'images', 'full', tosee_img)
+        Path(full_image_path).parent.mkdir(parents=True, exist_ok=True)
         ori_image.save(full_image_path)
 
-        # Create annotated image with bounding boxes
-        annotated_image = ori_image.copy()
-        draw = ImageDraw.Draw(annotated_image)
-        # Draw ground truth boxes in green
-        min_x, min_y, max_x, max_y = float('inf'), float('inf'), float('-inf'), float('-inf')
-        offset = 20
-        for idx, _box in enumerate(ori_gt_boxes):
-            x1, y1, w, h = _box
-            x2, y2 = x1 + w, y1 + h
-            draw.rectangle([x1, y1, x2, y2], outline="green", width=3)
-            min_x = min(min_x, x1)
-            min_y = min(min_y, y1)
-            max_x = max(max_x, x2)
-            max_y = max(max_y, y2)
-        min_x, min_y, max_x, max_y = max(0, min_x - offset), max(0, min_y - offset), min(ori_image.width, max_x + offset), min(ori_image.height, max_y + offset)
-        annotated_image = annotated_image.crop((min_x, min_y, max_x, max_y))
-
-        # Save annotated image
-        annotated_path = os.path.join(output_dir, 'images', 'annotated', tosee_img)
-        annotated_image.save(annotated_path)
-
         # Extract thinking data and save cropped images
-        thinking_data = extract_thinking_data(ori_image, pred_output, ori_gt_boxes, tosee_img, output_dir)
-
-        # Prepare ground truth bbox data
-        gt_bbox_formatted = []
-        for _box in ori_gt_boxes:
-            x1, y1, w, h = _box
-            gt_bbox_formatted.append([x1, y1, x1 + w, y1 + h])
+        thinking_data = extract_thinking_data(ori_image, pred_output, tosee_img, output_dir)
 
         return {
             'image_filename': tosee_img,
@@ -263,28 +205,41 @@ def main():
             'predicted_answer': pred_ans,
             'full_pred_output': format_dialogue_string(pred_output),
             'is_correct': correct,
+            'accuracy_score': accuracy,
             'turn_depth': thinking_data['turn_depth'],
             'full_image_saved_path': full_image_path,
-            'annotated_image_path': annotated_path,
             'cropped_images_paths': json.dumps(thinking_data['cropped_images_paths']),
             'bbox_coordinates': json.dumps(thinking_data['bbox_coordinates']),
-            'gt_bbox_coordinates': json.dumps(gt_bbox_formatted),
-            'max_iou_score': thinking_data['max_iou_score'],
-            'all_iou_scores': json.dumps(thinking_data['iou_scores']),
-            'thinking_conversation': thinking_data['thinking_conversation'],
-            'gt_object_names': json.dumps(ori_gt_name)
+            'thinking_conversation': thinking_data['thinking_conversation']
         }
 
     # Main processing loop
-    print("Processing all cases and creating dataframe...")
+    print(f"Processing all cases with {args.num_workers} worker threads...")
     all_data = []
 
-    for line_id in range(len(image_list)):
-        if line_id % 10 == 0:
-            print(f"Processing {line_id}/{len(image_list)}")
+    # Progress tracking variables
+    completed_count = 0
+    total_count = len(image_list)
+    progress_lock = threading.Lock()
 
+    def process_with_progress(line_id):
+        """Wrapper function that includes progress tracking"""
+        nonlocal completed_count
         case_data = process_case(line_id, output_base_dir)
-        all_data.append(case_data)
+
+        with progress_lock:
+            completed_count += 1
+            if completed_count % 50 == 0 or completed_count == total_count:
+                print(f"Processing progress: {completed_count}/{total_count} ({completed_count/total_count*100:.1f}%)")
+
+        return case_data
+
+    with ThreadPoolExecutor(max_workers=args.num_workers) as executor:
+        # Use map to maintain order and process all cases
+        results = list(executor.map(process_with_progress, range(len(image_list))))
+
+        # Filter out None results
+        all_data = [case_data for case_data in results if case_data is not None]
 
     # Create DataFrame
     df = pd.DataFrame(all_data)
@@ -310,8 +265,7 @@ def main():
         'correct_predictions': correct_count,
         'accuracy': accuracy,
         'avg_turn_depth': df['turn_depth'].mean(),
-        'avg_max_iou': df['max_iou_score'].mean(),
-        'high_iou_cases': (df['max_iou_score'] > 0.5).sum()
+        'bbox_usage_cases': (df['bbox_coordinates'].apply(lambda x: len(json.loads(x)) > 0 if x else False)).sum()
     }
 
     # Create markdown report
@@ -320,7 +274,7 @@ def main():
         md_content = []
 
         # Title and summary
-        md_content.append("# Visual Reasoning Evaluation Analysis Report\n")
+        md_content.append("# Charxiv Evaluation Analysis Report\n")
         md_content.append(f"**Generated on:** {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         md_content.append("---\n")
 
@@ -332,8 +286,7 @@ def main():
         md_content.append(f"| Correct Predictions | {summary_stats['correct_predictions']} |")
         md_content.append(f"| Accuracy | {summary_stats['accuracy']:.3f} ({summary_stats['accuracy']*100:.1f}%) |")
         md_content.append(f"| Average Turn Depth | {summary_stats['avg_turn_depth']:.2f} |")
-        md_content.append(f"| Average Max IoU | {summary_stats['avg_max_iou']:.3f} |")
-        md_content.append(f"| High IoU Cases (>0.5) | {summary_stats['high_iou_cases']} |")
+        md_content.append(f"| Cases Using Tool | {summary_stats['bbox_usage_cases']} |")
         md_content.append("")
 
         # Dataset Info
@@ -347,29 +300,6 @@ def main():
         # Performance Analysis
         md_content.append("## Performance Analysis\n")
 
-        # IoU Distribution
-        iou_ranges = [
-            (-1.0, 0.0, "Zero"),
-            (0.0, 0.1, "Very Low"),
-            (0.1, 0.3, "Low"),
-            (0.3, 0.5, "Medium"),
-            (0.5, 0.7, "High"),
-            (0.7, 1.0, "Very High")
-        ]
-
-        md_content.append("### IoU Score Distribution\n")
-        md_content.append("| IoU Range | Description | Count | Percentage |")
-        md_content.append("|-----------|-------------|-------|------------|")
-
-        for min_iou, max_iou, desc in iou_ranges:
-            count = ((df['max_iou_score'] > min_iou) & (df['max_iou_score'] <= max_iou)).sum()
-            if min_iou == 0.7:  # Include 1.0 in the last range
-                count = (df['max_iou_score'] > min_iou).sum()
-            percentage = (count / len(df)) * 100
-            md_content.append(f"| {min_iou:.1f} - {max_iou:.1f} | {desc} | {count} | {percentage:.1f}% |")
-
-        md_content.append("")
-
         # Turn Depth Analysis
         md_content.append("### Turn Depth Analysis\n")
         turn_depth_stats = df['turn_depth'].value_counts().sort_index()
@@ -380,23 +310,33 @@ def main():
             md_content.append(f"| {depth} | {count} | {percentage:.1f}% |")
         md_content.append("")
 
-        # Accuracy by IoU ranges
-        md_content.append("### Accuracy by IoU Score Range\n")
-        md_content.append("| IoU Range | Correct | Total | Accuracy |")
-        md_content.append("|-----------|---------|-------|----------|")
+        # Tool Usage Analysis
+        md_content.append("### Tool Usage Analysis\n")
+        bbox_usage = df['bbox_coordinates'].apply(lambda x: len(json.loads(x)) > 0 if x else False)
+        tool_used_count = bbox_usage.sum()
+        tool_not_used_count = len(df) - tool_used_count
 
-        for min_iou, max_iou, desc in iou_ranges:
-            if min_iou == 0.7:
-                mask = df['max_iou_score'] > min_iou
-            else:
-                mask = (df['max_iou_score'] > min_iou) & (df['max_iou_score'] <= max_iou)
+        md_content.append("| Tool Usage | Count | Percentage |")
+        md_content.append("|------------|-------|------------|")
+        md_content.append(f"| Used Tool | {tool_used_count} | {(tool_used_count/len(df)*100):.1f}% |")
+        md_content.append(f"| No Tool | {tool_not_used_count} | {(tool_not_used_count/len(df)*100):.1f}% |")
+        md_content.append("")
 
-            subset = df[mask]
-            if len(subset) > 0:
-                correct = subset['is_correct'].sum()
-                total = len(subset)
-                acc = correct / total
-                md_content.append(f"| {min_iou:.1f} - {max_iou:.1f} | {correct} | {total} | {acc:.3f} ({acc*100:.1f}%) |")
+        # Accuracy by Tool Usage
+        md_content.append("### Accuracy by Tool Usage\n")
+        tool_used_df = df[bbox_usage]
+        tool_not_used_df = df[~bbox_usage]
+
+        md_content.append("| Tool Usage | Correct | Total | Accuracy |")
+        md_content.append("|------------|---------|-------|----------|")
+
+        if len(tool_used_df) > 0:
+            tool_acc = tool_used_df['is_correct'].mean()
+            md_content.append(f"| Used Tool | {tool_used_df['is_correct'].sum()} | {len(tool_used_df)} | {tool_acc:.3f} ({tool_acc*100:.1f}%) |")
+
+        if len(tool_not_used_df) > 0:
+            no_tool_acc = tool_not_used_df['is_correct'].mean()
+            md_content.append(f"| No Tool | {tool_not_used_df['is_correct'].sum()} | {len(tool_not_used_df)} | {no_tool_acc:.3f} ({no_tool_acc*100:.1f}%) |")
 
         md_content.append("")
 
@@ -404,7 +344,7 @@ def main():
         md_content.append("## Sample Cases\n")
 
         # Helper function to create image HTML
-        def format_image_path(path, max_width=150, max_height=150, use_base64=True):
+        def format_image_path(path, max_width=150, max_height=150, use_base64=False):
             """Convert image path to HTML img tag with preserved aspect ratio"""
             if pd.isna(path) or path == '':
                 return ''
@@ -422,15 +362,15 @@ def main():
                     print(f"Error encoding image {path}: {e}")
                     return f'<span style="color: red;">Image load error</span>'
             else:
-                # Use relative path (requires images to be accessible relative to markdown file)
+                # Use relative path
                 try:
                     rel_path = os.path.relpath(path, output_dir)
                     return f'<img src="{rel_path}" style="max-width: {max_width}px; max-height: {max_height}px; height: auto; width: auto; object-fit: contain; border: 1px solid #ddd; border-radius: 4px;">'
                 except:
                     return f'<span style="color: red;">Path error</span>'
 
-        def format_cropped_images(cropped_paths_json, max_width=100, max_height=100, use_base64=True):
-            """Convert cropped image paths JSON to HTML img tags with preserved aspect ratio"""
+        def format_cropped_images(cropped_paths_json, max_width=100, max_height=100, use_base64=False):
+            """Convert cropped image paths JSON to HTML img tags"""
             if pd.isna(cropped_paths_json) or cropped_paths_json == '':
                 return ''
             try:
@@ -454,7 +394,6 @@ def main():
                         img_tag = f'<img src="{rel_path}" style="max-width: {max_width}px; max-height: {max_height}px; height: auto; width: auto; object-fit: contain; border: 1px solid #ddd; margin: 2px; border-radius: 3px;" title="Crop {i+1}">'
                         img_tags.append(img_tag)
 
-                # Return images in a flex container for better layout
                 return f'<div style="display: flex; flex-wrap: wrap; gap: 2px; align-items: center;">{" ".join(img_tags)}</div>'
             except Exception as e:
                 print(f"Error processing cropped images: {e}")
@@ -464,26 +403,45 @@ def main():
             """Format correctness as emoji"""
             return '✅' if is_correct else '❌'
 
-        def format_iou_score(score):
-            """Format IoU score with color coding"""
+        def format_accuracy_score(score):
+            """Format accuracy score with color coding"""
             if pd.isna(score):
                 return ''
-            color = '#28a745' if score > 0.7 else '#ffc107' if score > 0.3 else '#dc3545'
-            return f'<span style="color: {color}; font-weight: bold;">{score:.3f}</span>'
+            color = '#28a745' if score == 1.0 else '#dc3545'
+            return f'<span style="color: {color}; font-weight: bold;">{score:.1f}</span>'
 
-        # Shared function to create table formatters
+        # Table formatters
         def get_table_formatters():
             return {
                 'Full Image': lambda x: format_image_path(x, 150, 150, use_base64=False),
-                'Annotated': lambda x: format_image_path(x, 150, 150, use_base64=False),
                 'Cropped Regions': lambda x: format_cropped_images(x, 100, 100, use_base64=False),
                 'Correct': format_correctness,
-                'IoU Score': format_iou_score,
+                'Accuracy': format_accuracy_score,
                 'Question': lambda x: x if not pd.isna(x) else '',
                 'Ground Truth': lambda x: x if not pd.isna(x) else '',
                 'Prediction': lambda x: x if not pd.isna(x) else '',
                 'Full Dialogue': lambda x: x if not pd.isna(x) else ''
             }
+
+        # Column configuration
+        display_columns = ['image_filename', 'question', 'ground_truth_answer', 'predicted_answer',
+                          'full_pred_output', 'is_correct', 'accuracy_score', 'turn_depth', 'full_image_saved_path',
+                          'cropped_images_paths']
+
+        column_names = {
+            'image_filename': 'Image',
+            'question': 'Question',
+            'ground_truth_answer': 'Ground Truth',
+            'predicted_answer': 'Prediction',
+            'full_pred_output': 'Full Dialogue',
+            'is_correct': 'Correct',
+            'accuracy_score': 'Accuracy',
+            'turn_depth': 'Turns',
+            'full_image_saved_path': 'Full Image',
+            'cropped_images_paths': 'Cropped Regions'
+        }
+
+        formatters = get_table_formatters()
 
         # Shared function to generate styled table
         def generate_styled_table(display_df, table_id, formatters):
@@ -525,77 +483,55 @@ def main():
     max-width: 200px;
     word-wrap: break-word;
 }}
-/* Image column styling - columns 9, 10, 11 (Full Image, Annotated, Cropped Regions) */
-#{table_id} td:nth-child(9),
-#{table_id} td:nth-child(10),
-#{table_id} td:nth-child(11) {{
-    text-align: center;
-    vertical-align: top;
-    min-width: 120px;
-    max-width: 180px;
-    padding: 8px;
-}}
 </style>
 
 {html_table}
 """
             return styled_table
 
-        # Column configuration
-        display_columns = ['image_filename', 'question', 'ground_truth_answer', 'predicted_answer',
-                          'full_pred_output', 'is_correct', 'max_iou_score', 'turn_depth', 'full_image_saved_path',
-                          'annotated_image_path', 'cropped_images_paths']
-
-        column_names = {
-            'image_filename': 'Image',
-            'question': 'Question',
-            'ground_truth_answer': 'Ground Truth',
-            'predicted_answer': 'Prediction',
-            'full_pred_output': 'Full Dialogue',
-            'is_correct': 'Correct',
-            'max_iou_score': 'IoU Score',
-            'turn_depth': 'Turns',
-            'full_image_saved_path': 'Full Image',
-            'annotated_image_path': 'Annotated',
-            'cropped_images_paths': 'Cropped Regions'
-        }
-
-        formatters = get_table_formatters()
-
         # Wrong cases (incorrect)
         wrong_cases = df[(df['is_correct'] == False)]
         if len(wrong_cases) > 0:
             print(f"Wrong cases: {len(wrong_cases)}")
-            # wrong_cases = wrong_cases.sample(5, random_state=42)
+            sample_size = min(10, len(wrong_cases))
+            wrong_cases_sample = wrong_cases.sample(sample_size, random_state=42)
             md_content.append("### Wrong Cases (Incorrect)\n")
 
-            wrong_display = wrong_cases[display_columns].copy().rename(columns=column_names)
+            wrong_display = wrong_cases_sample[display_columns].copy().rename(columns=column_names)
             styled_table = generate_styled_table(wrong_display, 'wrong-cases-table', formatters)
             md_content.append(styled_table)
             md_content.append("")
 
-        # Challenging cases (low IoU)
-        challenging_cases = df[(df['max_iou_score'] < 0.2)]
-        if len(challenging_cases) > 0:
-            challenging_cases = challenging_cases.sample(5, random_state=42)
-            print(f"Challenging cases: {len(challenging_cases)}")
-            md_content.append("### Challenging Cases (Low IoU)\n")
+        # Correct cases with tool usage
+        correct_with_tool = df[(df['is_correct'] == True) & (df['bbox_coordinates'].apply(lambda x: len(json.loads(x)) > 0 if x else False))]
+        if len(correct_with_tool) > 0:
+            print(f"Correct cases with tool: {len(correct_with_tool)}")
+            sample_size = min(5, len(correct_with_tool))
+            correct_sample = correct_with_tool.sample(sample_size, random_state=42)
+            md_content.append("### Best Performing Cases (Correct + Used Tool)\n")
 
-            challenging_display = challenging_cases[display_columns].copy().rename(columns=column_names)
-            styled_table = generate_styled_table(challenging_display, 'challenging-cases-table', formatters)
+            best_display = correct_sample[display_columns].copy().rename(columns=column_names)
+            styled_table = generate_styled_table(best_display, 'best-cases-table', formatters)
             md_content.append(styled_table)
             md_content.append("")
 
-        # Best cases (high IoU and correct)
-        best_cases = df[(df['is_correct'] == True) & (df['max_iou_score'] > 0.7)]
-        if len(best_cases) > 0:
-            print(f"Best cases: {len(best_cases)}")
-            num = min(2, len(best_cases))
-            best_cases = best_cases.sample(num, random_state=42)
-            md_content.append("### Best Performing Cases (Correct + High IoU)\n")
-
-            best_display = best_cases[display_columns].copy().rename(columns=column_names)
-            styled_table = generate_styled_table(best_display, 'best-cases-table', formatters)
+        # cases with more than 2 turns
+        # for each turn number > 2, pick up to 3 images
+        max_turns = df['turn_depth'].max()
+        # For each turn number > 2, pick up to 3 images and display as a table
+        turn_samples = []
+        for turn_num in range(3, int(max_turns) + 1):
+            turn_cases = df[df['turn_depth'] == turn_num]
+            if len(turn_cases) == 0:
+                continue
+            sample_size = min(3, len(turn_cases))
+            turn_sample = turn_cases.sample(sample_size, random_state=42)
+            turn_samples.append(turn_sample)
+        if len(turn_samples) > 0:
+            turn_samples_df = pd.concat(turn_samples)
+            md_content.append("### Cases with Turn Depth > 2\n")
+            turn_display = turn_samples_df[display_columns].copy().rename(columns=column_names)
+            styled_table = generate_styled_table(turn_display, 'multi-turn-cases-table', formatters)
             md_content.append(styled_table)
             md_content.append("")
 
@@ -609,16 +545,12 @@ def main():
         md_content.append("| predicted_answer | string | Model's prediction |")
         md_content.append("| full_pred_output | string | Full predicted conversation (formatted as dialogue) |")
         md_content.append("| is_correct | boolean | Whether prediction is correct |")
+        md_content.append("| accuracy_score | float | Accuracy score from judge (0.0 or 1.0) |")
         md_content.append("| turn_depth | integer | Number of conversation turns |")
         md_content.append("| full_image_saved_path | string | Path to saved full image |")
-        md_content.append("| annotated_image_path | string | Path to annotated image |")
         md_content.append("| cropped_images_paths | JSON string | List of cropped image paths |")
         md_content.append("| bbox_coordinates | JSON string | Predicted bounding box coordinates |")
-        md_content.append("| gt_bbox_coordinates | JSON string | Ground truth bounding box coordinates |")
-        md_content.append("| max_iou_score | float | Highest IoU score achieved |")
-        md_content.append("| all_iou_scores | JSON string | All IoU scores |")
         md_content.append("| thinking_conversation | string | Full conversation text |")
-        md_content.append("| gt_object_names | JSON string | Ground truth object names |")
         md_content.append("")
 
         # File Structure
@@ -629,8 +561,7 @@ def main():
         md_content.append("├── analysis_report.md         # This report")
         md_content.append("└── images/")
         md_content.append("    ├── full/                  # Original images")
-        md_content.append("    ├── cropped/               # Cropped regions with IoU scores")
-        md_content.append("    └── annotated/             # Images with GT boxes drawn")
+        md_content.append("    └── cropped/               # Cropped regions from tool usage")
         md_content.append("```")
 
         return "\n".join(md_content)
@@ -643,11 +574,6 @@ def main():
 
     print(f"Markdown report saved to: {md_path}")
     print(f"Images saved to: {os.path.join(output_base_dir, 'images')}")
-
-    # %%
-    # Display first few rows of the dataframe
-    # print("\nFirst 5 rows of the dataframe:")
-    # print(df.head())
 
     # %%
     # Display column info
