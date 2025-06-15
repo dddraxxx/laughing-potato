@@ -345,7 +345,7 @@ def main():
 
         # Helper function to create image HTML
         def format_image_path(path, max_width=150, max_height=150, use_base64=False):
-            """Convert image path to HTML img tag with preserved aspect ratio"""
+            """Convert image path to HTML img tag with preserved aspect ratio and hover effect"""
             if pd.isna(path) or path == '':
                 return ''
 
@@ -357,7 +357,7 @@ def main():
                         img_data = base64.b64encode(img_file.read()).decode()
                         img_ext = path.split('.')[-1].lower()
                         mime_type = f'image/{img_ext}' if img_ext in ['png', 'jpg', 'jpeg', 'gif'] else 'image/jpeg'
-                        return f'<img src="data:{mime_type};base64,{img_data}" style="max-width: {max_width}px; max-height: {max_height}px; height: auto; width: auto; object-fit: contain; border: 1px solid #ddd; border-radius: 4px;">'
+                        return f'<img src="data:{mime_type};base64,{img_data}" class="hover-image" style="max-width: {max_width}px; max-height: {max_height}px; height: auto; width: auto; object-fit: contain; border: 1px solid #ddd; border-radius: 4px;">'
                 except Exception as e:
                     print(f"Error encoding image {path}: {e}")
                     return f'<span style="color: red;">Image load error</span>'
@@ -365,7 +365,7 @@ def main():
                 # Use relative path
                 try:
                     rel_path = os.path.relpath(path, output_dir)
-                    return f'<img src="{rel_path}" style="max-width: {max_width}px; max-height: {max_height}px; height: auto; width: auto; object-fit: contain; border: 1px solid #ddd; border-radius: 4px;">'
+                    return f'<img src="{rel_path}" class="hover-image" style="max-width: {max_width}px; max-height: {max_height}px; height: auto; width: auto; object-fit: contain; border: 1px solid #ddd; border-radius: 4px;">'
                 except:
                     return f'<span style="color: red;">Path error</span>'
 
@@ -384,14 +384,14 @@ def main():
                                 img_data = base64.b64encode(img_file.read()).decode()
                                 img_ext = path.split('.')[-1].lower()
                                 mime_type = f'image/{img_ext}' if img_ext in ['png', 'jpg', 'jpeg', 'gif'] else 'image/jpeg'
-                                img_tag = f'<img src="data:{mime_type};base64,{img_data}" style="max-width: {max_width}px; max-height: {max_height}px; height: auto; width: auto; object-fit: contain; border: 1px solid #ddd; margin: 2px; border-radius: 3px;" title="Crop {i+1}">'
+                                img_tag = f'<img src="data:{mime_type};base64,{img_data}" class="hover-image-crop" style="max-width: {max_width}px; max-height: {max_height}px; height: auto; width: auto; object-fit: contain; border: 1px solid #ddd; margin: 2px; border-radius: 3px;" title="Crop {i+1}">'
                                 img_tags.append(img_tag)
                         except Exception as e:
                             print(f"Error encoding cropped image {path}: {e}")
                             img_tags.append(f'<span style="color: red;">Error</span>')
                     else:
                         rel_path = os.path.relpath(path, output_dir)
-                        img_tag = f'<img src="{rel_path}" style="max-width: {max_width}px; max-height: {max_height}px; height: auto; width: auto; object-fit: contain; border: 1px solid #ddd; margin: 2px; border-radius: 3px;" title="Crop {i+1}">'
+                        img_tag = f'<img src="{rel_path}" class="hover-image-crop" style="max-width: {max_width}px; max-height: {max_height}px; height: auto; width: auto; object-fit: contain; border: 1px solid #ddd; margin: 2px; border-radius: 3px;" title="Crop {i+1}">'
                         img_tags.append(img_tag)
 
                 return f'<div style="display: flex; flex-wrap: wrap; gap: 2px; align-items: center;">{" ".join(img_tags)}</div>'
@@ -482,6 +482,49 @@ def main():
 #{table_id} td {{
     max-width: 200px;
     word-wrap: break-word;
+}}
+
+/* Hover effects for images */
+.hover-image {{
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    z-index: 1;
+}}
+
+.hover-image:hover {{
+    max-width: none !important;
+    max-height: none !important;
+    width: auto !important;
+    height: auto !important;
+    transform: none;
+    z-index: 1000;
+    box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+    border: 2px solid #007bff !important;
+}}
+
+.hover-image-crop {{
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    z-index: 1;
+}}
+
+.hover-image-crop:hover {{
+    max-width: none !important;
+    max-height: none !important;
+    width: auto !important;
+    height: auto !important;
+    transform: none;
+    z-index: 1000;
+    box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+    border: 2px solid #28a745 !important;
+}}
+
+/* Ensure table cells allow for image overflow during hover */
+#{table_id} td {{
+    position: relative;
+    overflow: visible;
 }}
 </style>
 
